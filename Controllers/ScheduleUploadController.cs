@@ -56,7 +56,7 @@ public async Task<IActionResult> ConvertAndUpload([FromForm] IFormFile file)
         
         try 
         {
-            const string fhirServerUrl = "https://hapi.fhir.org/baseR4/Slot";
+            const string fhirServerUrl = "https://tzuchi-fhir.ddns.net/fhir/Slot";
             var content = new StringContent(jsonPayload, System.Text.Encoding.UTF8, "application/fhir+json");
             _httpClient.Timeout = TimeSpan.FromSeconds(3); // 設定 3 秒超時，避免卡太久
             
