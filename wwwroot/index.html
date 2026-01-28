@@ -34,54 +34,90 @@
 
         <div id="result-container">
             <div id="statusLabel" class="status-badge"></div>
+            <div id="action-buttons" style="margin-bottom: 1rem; display: none;">
+                <button class="btn" style="background: #10b981;" onclick="sendToServer()">🚀 手動上傳到伺服器 (203.64.84.204)</button>
+            </div>
             <pre id="jsonOutput"></pre>
         </div>
     </div>
 
     <script>
+        // 💡 重要：在最外層宣告變數，這樣所有 function 都讀得到
+        let currentSlotJson = null;
+
         async function uploadSingle() {
             const fileInput = document.getElementById('csvFile');
             const resultContainer = document.getElementById('result-container');
             const jsonOutput = document.getElementById('jsonOutput');
             const statusLabel = document.getElementById('statusLabel');
+            const actionButtons = document.getElementById('action-buttons');
 
             if (!fileInput.files[0]) {
                 alert("請先選擇 CSV 檔案");
                 return;
             }
 
-            const formData = new FormData();
-            formData.append('file', fileInput.files[0]);
+         const formData = new FormData();
+formData.append('file', fileInput.files[0]);
 
-            // 顯示載入中
             resultContainer.style.display = 'block';
             statusLabel.className = 'status-badge';
             statusLabel.innerText = "⏳ 處理中...";
             jsonOutput.innerText = "正在解析資料...";
+            actionButtons.style.display = 'none';
 
             try {
-                // 注意：這裡呼叫的是你新專案定義的 Route
-               const response = await fetch('/api/ScheduleUpload/convert-single', {
+                // 呼叫後端 API (包含轉換與自動上傳)
+                const response = await fetch('/api/ScheduleUpload/convert-and-upload', {
                     method: 'POST',
                     body: formData
                 });
 
-                const data = await response.text();
+                const data = await response.json(); // 改用 JSON 解析
 
                 if (response.ok) {
-                    const jsonObj = JSON.parse(data);
+                    // 如果後端有回傳產生的 JSON
+                    currentSlotJson = JSON.parse(data.generatedJson); 
                     statusLabel.className = 'status-badge success';
-                    statusLabel.innerText = "✅ 轉換成功 (單筆)";
-                    jsonOutput.innerText = JSON.stringify(jsonObj, null, 4);
+                    statusLabel.innerText = "✅ 轉換成功 (並已嘗試自動上傳)";
+                    jsonOutput.innerText = JSON.stringify(currentSlotJson, null, 4);
+                    actionButtons.style.display = 'block'; // 顯示手動上傳按鈕以防萬一
                 } else {
                     statusLabel.className = 'status-badge error';
-                    statusLabel.innerText = "❌ 轉換失敗";
-                    jsonOutput.innerText = data;
+                    statusLabel.innerText = "❌ 處理失敗";
+                    jsonOutput.innerText = typeof data === 'object' ? JSON.stringify(data, null, 2) : data;
                 }
             } catch (err) {
                 statusLabel.className = 'status-badge error';
                 statusLabel.innerText = "📡 連線錯誤";
                 jsonOutput.innerText = "無法連接到 API，請確認後端是否已啟動 (dotnet run)。";
+            }
+        }
+
+        async function sendToServer() {
+            if (!currentSlotJson) {
+                alert("請先轉換 CSV 取得 JSON 資料");
+                return;
+            }
+
+            const fhirServerUrl = "https://hapi.fhir.org/baseR4/Slot";
+
+            try {
+                const response = await fetch(fhirServerUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/fhir+json' },
+                    body: JSON.stringify(currentSlotJson)
+                });
+
+                if (response.ok) {
+                    const result = await response.json();
+                    alert("✨ 手動上傳成功！伺服器 ID: " + result.id);
+                } else {
+                    const errorText = await response.text();
+                    alert("❌ 上傳失敗：" + errorText);
+                }
+            } catch (err) {
+                alert("📡 無法連線至 FHIR Server (可能是 CORS 問題，建議使用後端自動上傳)。");
             }
         }
     </script>
